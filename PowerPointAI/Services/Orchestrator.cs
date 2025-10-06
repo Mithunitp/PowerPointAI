@@ -1,45 +1,49 @@
-using PowerpointAi.Models;
-
 namespace PowerpointAi.Services
 {
-    public class Orchestrator
+    public class OrchestratorService
     {
-        private readonly AgentService _agentService;
-        private readonly PowerPointService _powerPointService;
+        private readonly FoundryService _foundry;
 
-        public Orchestrator(AgentService agentService, PowerPointService powerPointService)
+        public OrchestratorService(FoundryService foundry)
         {
-            _agentService = agentService;
-            _powerPointService = powerPointService;
+            _foundry = foundry;
         }
 
-        public async Task<List<McpResponse>> OrchestrateAsync(string userQuery)
+        public async Task<string> RunPipelineAsync(string topic)
         {
-            var results = new List<McpResponse>();
-
             // Step 1: Research
-            var research = await _agentService.RunAgentAsync(
-                new McpMessage { Agent = "ResearchAgent", Input = userQuery },
-                new AgentConfig { Name = "ResearchAgent", Prompt = "You are a research assistant." });
-            results.Add(research);
+            var research = await _foundry.RunAgentAsync(
+                "ResearchAgent",
+                topic,
+                "You are a research assistant. Gather detailed points on the given topic."
+            );
 
-            // Step 2: Summarizer
-            var summary = await _agentService.RunAgentAsync(
-                new McpMessage { Agent = "SummarizerAgent", Input = research.Output },
-                new AgentConfig { Name = "SummarizerAgent", Prompt = "Summarize into JSON with title + key points." });
-            results.Add(summary);
+            // Step 2: Summarize
+            var summary = await _foundry.RunAgentAsync(
+                "SummarizerAgent",
+                research,
+                "You are a summarizer. Turn the research input into a concise, clear summary."
+            );
 
-            // Step 3: PowerPoint Generation
-            string pptPath = Path.Combine(Directory.GetCurrentDirectory(), "GeneratedPresentation.pptx");
-            _powerPointService.GeneratePpt(summary, pptPath);
+            return summary;
+        }
 
-            results.Add(new McpResponse
-            {
-                Agent = "PresenterAgent",
-                Output = $"Presentation generated at: {pptPath}"
-            });
+        public async Task<string> RunResearchAsync(string topic)
+        {
+            return await _foundry.RunAgentAsync(
+                "ResearchAgent",
+                topic,
+                "You are a research assistant. Gather detailed points on the given topic."
+            );
+        }
 
-            return results;
+        public async Task<string> RunSummarizerAsync(string input)
+        {
+            return await _foundry.RunAgentAsync(
+                "SummarizerAgent",
+                input,
+                "You are a summarizer. Turn the research input into a concise, clear summary."
+            );
         }
     }
 }
