@@ -1,3 +1,4 @@
+using Azure;
 using Azure.AI.Projects;
 
 namespace PowerpointAi.Services
@@ -7,6 +8,9 @@ namespace PowerpointAi.Services
         private readonly AIProjectClient _client;
         private readonly string _projectId;
 
+        // Dictionary to store agent "definitions" (name → systemPrompt)
+        private readonly Dictionary<string, string> _agents = new();
+
         public FoundryService(AIProjectClient client, IConfiguration config)
         {
             _client = client;
@@ -15,29 +19,21 @@ namespace PowerpointAi.Services
 
         public async Task<string> RunAgentAsync(string agentName, string input, string systemPrompt)
         {
-            var agentsClient = _client.GetPersistentAgentsClient();
-
-            var existing = agentsClient.ListAgents(_projectId)
-                                       .FirstOrDefault(a => a.Name == agentName);
-
-            if (existing is null)
+            // Register agent in dictionary if not already
+            if (!_agents.ContainsKey(agentName))
             {
-                var created = await agentsClient.CreateAgentAsync(
-                    project: _projectId,
-                    name: agentName,
-                    instructions: systemPrompt,
-                    model: "gpt-4o-mini"
-                );
-                existing = created.Value;
+                _agents[agentName] = systemPrompt;
             }
 
-            var run = await agentsClient.RunAgentAsync(
+            // Run the agent using RunAsync (current SDK)
+            var response = await _client.RunAsync(
                 project: _projectId,
-                agentName: existing.Name,
-                input: input
+                model: "gpt-4o-mini",
+                input: input,
+                instructions: _agents[agentName]
             );
 
-            return run.Value.Output;
+            return response.Output;
         }
     }
 }
