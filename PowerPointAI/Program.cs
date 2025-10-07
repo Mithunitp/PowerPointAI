@@ -1,21 +1,9 @@
-using Azure;
-using Azure.AI.Projects;
 using PowerpointAi.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var azureConfig = builder.Configuration.GetSection("AzureAI");
-
-// Register Foundry client
-builder.Services.AddSingleton(sp =>
-{
-    var endpoint = new Uri(azureConfig["Endpoint"]!);
-    var apiKey = new AzureKeyCredential(azureConfig["ApiKey"]!);
-    return new AIProjectClient(endpoint, apiKey);
-});
-
-// Add services
-builder.Services.AddScoped<FoundryService>();
+builder.Services.AddHttpClient();
+builder.Services.AddScoped<FoundryRestService>();
 builder.Services.AddScoped<OrchestratorService>();
 
 builder.Services.AddControllers();
