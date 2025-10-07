@@ -1,39 +1,49 @@
-using Azure;
-using Azure.AI.Projects;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
 
 namespace PowerpointAi.Services
 {
-    public class FoundryService
+    public class FoundryRestService
     {
-        private readonly AIProjectClient _client;
-        private readonly string _projectId;
+        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IConfiguration _config;
 
-        // Dictionary to store agent "definitions" (name → systemPrompt)
-        private readonly Dictionary<string, string> _agents = new();
-
-        public FoundryService(AIProjectClient client, IConfiguration config)
+        public FoundryRestService(IHttpClientFactory httpClientFactory, IConfiguration config)
         {
-            _client = client;
-            _projectId = config["AzureAI:ProjectId"]!;
+            _httpClientFactory = httpClientFactory;
+            _config = config;
         }
 
-        public async Task<string> RunAgentAsync(string agentName, string input, string systemPrompt)
+        public async Task<string> RunAgentAsync(string agentName, string input)
         {
-            // Register agent in dictionary if not already
-            if (!_agents.ContainsKey(agentName))
+            var endpoint = _config["Foundry:Endpoint"]!;
+            var apiKey = _config["Foundry:ApiKey"]!;
+
+            var client = _httpClientFactory.CreateClient();
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+
+            var payload = new
             {
-                _agents[agentName] = systemPrompt;
+                model = agentName,
+                input = input
+            };
+
+            var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+            var response = await client.PostAsync(endpoint, content);
+            response.EnsureSuccessStatusCode();
+
+            var result = await response.Content.ReadAsStringAsync();
+
+            // Extract 'output' from JSON
+            using var doc = JsonDocument.Parse(result);
+            if (doc.RootElement.TryGetProperty("output", out var output))
+            {
+                return output.GetString() ?? string.Empty;
             }
 
-            // Run the agent using RunAsync (current SDK)
-            var response = await _client.RunAsync(
-                project: _projectId,
-                model: "gpt-4o-mini",
-                input: input,
-                instructions: _agents[agentName]
-            );
-
-            return response.Output;
+            return string.Empty;
         }
     }
 }
